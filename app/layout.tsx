@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { GeistMono } from "geist/font/mono"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -43,10 +42,10 @@ export const metadata: Metadata = {
     title: "Geval - Eval-Driven Release Enforcement for AI",
     description: "Turn eval results into enforced release decisions. The open-source release enforcement engine for AI teams.",
     images: ["/og-image.png"],
-    creator: "@geval_dev",
+    creator: "@geval_labs",
   },
   icons: {
-    icon: "/favicon.svg",
+    icon: "/white_bg_greenlogo.svg",
   },
 }
 
@@ -60,9 +59,12 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" 
+          rel="stylesheet" 
+        />
       </head>
-      <body className={`font-mono ${GeistMono.variable}`}>
+      <body className="antialiased">
         {children}
       </body>
     </html>

@@ -1,33 +1,36 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
+import { useState, useEffect, useRef } from "react"
+import { motion, useInView, AnimatePresence } from "framer-motion"
 import { 
-  Shield, 
-  GitBranch, 
-  Terminal, 
   CheckCircle2, 
   XCircle, 
-  AlertTriangle,
   Github,
   FileCode,
-  Lock,
   Zap,
   Eye,
-  Check,
-  Copy,
   Loader2,
   Mail,
-  Sparkles,
-  Star
+  Star,
+  Copy,
+  Check,
+  AlertCircle,
+  Lock,
+  Terminal,
+  GitBranch
 } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
+import { supabase } from "@/lib/supabase"
 
 const GITHUB_REPO = "overseek944/Geval"
 
+// ============================================================================
 // GitHub Stars Component
-function GitHubStars() {
+// ============================================================================
+
+function GitHubStars({ variant = "default" }: { variant?: "default" | "minimal" }) {
   const [stars, setStars] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -40,30 +43,63 @@ function GitHubStars() {
         }
         setLoading(false)
       })
-      .catch(() => {
-        setLoading(false)
-      })
+      .catch(() => setLoading(false))
   }, [])
+
+  if (variant === "minimal") {
+    return (
+      <Link
+        href={`https://github.com/${GITHUB_REPO}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Github className="w-4 h-4" />
+        <span>{loading ? "—" : stars ?? "0"} stars</span>
+      </Link>
+    )
+  }
 
   return (
     <Link
       href={`https://github.com/${GITHUB_REPO}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 px-4 py-2 text-sm border border-border rounded-lg hover:border-primary/50 hover:bg-secondary/50 transition-all group"
+      className="group inline-flex items-center gap-2.5 px-4 py-2 text-sm bg-secondary/50 border border-border rounded-full hover:border-primary/30 hover:bg-secondary transition-all duration-300"
     >
       <Github className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-      <span className="text-muted-foreground group-hover:text-foreground transition-colors">Star</span>
-      <span className="flex items-center gap-1 px-2 py-0.5 bg-secondary rounded text-xs font-medium text-foreground">
-        <Star className="w-3 h-3 fill-accent text-accent" />
+      <span className="text-muted-foreground group-hover:text-foreground transition-colors">Star on GitHub</span>
+      <span className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 rounded-full text-xs font-medium text-primary">
+        <Star className="w-3 h-3" />
         {loading ? "—" : stars ?? "0"}
       </span>
     </Link>
   )
 }
 
-// Waitlist Form Component
-function WaitlistForm({ variant = "default" }: { variant?: "default" | "inline" }) {
+// Simple star count for navbar (no link, just the number)
+function NavStarCount() {
+  const [stars, setStars] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${GITHUB_REPO}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.stargazers_count !== undefined) {
+          setStars(data.stargazers_count)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  return <span>{stars ?? "0"}</span>
+}
+
+// ============================================================================
+// Waitlist Form
+// ============================================================================
+
+function WaitlistForm({ size = "default" }: { size?: "default" | "large" }) {
   const [email, setEmail] = useState("")
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [message, setMessage] = useState("")
@@ -79,13 +115,41 @@ function WaitlistForm({ variant = "default" }: { variant?: "default" | "inline" 
 
     setStatus("loading")
     
-    // Simulate API call - replace with your actual waitlist API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // For now, just show success - you'll want to connect this to your backend
-    setStatus("success")
-    setMessage("You're on the list! We'll be in touch soon.")
-    setEmail("")
+    try {
+      // Check if email already exists
+      const { data: existing } = await supabase
+        .from('waitlist')
+        .select('email')
+        .eq('email', email.toLowerCase().trim())
+        .single()
+
+      if (existing) {
+        setStatus("success")
+        setMessage("You're already on the list!")
+        setEmail("")
+        return
+      }
+
+      // Insert new email
+      const { error } = await supabase
+        .from('waitlist')
+        .insert([
+          { 
+            email: email.toLowerCase().trim(),
+            source: 'landing_page'
+          }
+        ])
+
+      if (error) throw error
+
+      setStatus("success")
+      setMessage("You're on the list!")
+      setEmail("")
+    } catch (err) {
+      console.error('Waitlist submission error:', err)
+      setStatus("error")
+      setMessage("Something went wrong. Please try again.")
+    }
   }
 
   if (status === "success") {
@@ -93,10 +157,7 @@ function WaitlistForm({ variant = "default" }: { variant?: "default" | "inline" 
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className={cn(
-          "flex items-center gap-3 px-6 py-4 rounded-xl bg-primary/10 border border-primary/30",
-          variant === "inline" && "justify-center"
-        )}
+        className="flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-primary/10 border border-primary/20"
       >
         <CheckCircle2 className="w-5 h-5 text-primary" />
         <span className="text-primary font-medium">{message}</span>
@@ -104,844 +165,947 @@ function WaitlistForm({ variant = "default" }: { variant?: "default" | "inline" 
     )
   }
 
-  if (variant === "inline") {
-    return (
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
-        <div className="relative flex-1">
-          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com"
-            className="w-full pl-11 pr-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={status === "loading"}
-          className="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 glow-primary transition-all disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap"
-        >
-          {status === "loading" ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <>
-              Join Waitlist
-            </>
-          )}
-        </button>
-        {status === "error" && (
-          <p className="text-red-400 text-sm absolute -bottom-6 left-0">{message}</p>
-        )}
-      </form>
-    )
-  }
+  const inputClass = size === "large" 
+    ? "w-full pl-12 pr-4 py-4 text-base" 
+    : "w-full pl-10 pr-4 py-3 text-sm"
+  
+  const buttonClass = size === "large"
+    ? "px-8 py-4 text-base"
+    : "px-6 py-3 text-sm"
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="relative">
-        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 w-full">
+      <div className="relative flex-1">
+        <Mail className={cn(
+          "absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground",
+          size === "large" ? "w-5 h-5" : "w-4 h-4"
+        )} />
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter your work email"
-          className="w-full pl-12 pr-4 py-4 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all text-lg"
+          placeholder="Enter your email"
+          className={cn(
+            inputClass,
+            "bg-secondary/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground/60",
+            "focus:outline-none focus:border-primary/40 focus:bg-secondary transition-all duration-300"
+          )}
         />
       </div>
       <button
         type="submit"
         disabled={status === "loading"}
-        className="w-full px-6 py-4 bg-primary text-primary-foreground rounded-xl font-semibold text-lg hover:bg-primary/90 glow-primary transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+        className={cn(
+          buttonClass,
+          "bg-primary text-primary-foreground rounded-xl font-medium",
+          "hover:bg-primary/90 active:scale-[0.98] transition-all duration-200",
+          "disabled:opacity-60 disabled:cursor-not-allowed",
+          "flex items-center justify-center gap-2 whitespace-nowrap"
+        )}
       >
         {status === "loading" ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
-          <>
-            Join the Waitlist
-          </>
+          "Get Early Access"
         )}
       </button>
       {status === "error" && (
-        <p className="text-red-400 text-sm">{message}</p>
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute -bottom-6 left-0 text-red-400 text-xs"
+        >
+          {message}
+        </motion.p>
       )}
-      <p className="text-xs text-muted-foreground text-center">
-        No spam. We'll only email you when we launch.
-      </p>
     </form>
   )
 }
 
-// Terminal Animation Component
+// ============================================================================
+// Terminal Demo
+// ============================================================================
+
 function TerminalDemo() {
   const [currentLine, setCurrentLine] = useState(0)
+  const [copied, setCopied] = useState(false)
   
   const lines = [
-    { type: "command", text: "$ geval check" },
-    { type: "output", text: "→ Loading contract: .geval/contracts/safety.yaml" },
-    { type: "output", text: "→ Fetching eval results from promptfoo..." },
-    { type: "output", text: "" },
-    { type: "success", text: "✓ toxicity_score: 0.02 (threshold: < 0.1)" },
-    { type: "success", text: "✓ accuracy: 0.94 (threshold: ≥ 0.90)" },
-    { type: "error", text: "✗ hallucination_rate: 0.15 (threshold: < 0.05)" },
-    { type: "output", text: "" },
-    { type: "blocked", text: "BLOCKED: 1 contract violation detected" },
-    { type: "output", text: "→ PR #247 cannot be merged" },
+    { type: "command", text: "$ geval check --contract safety.yaml" },
+    { type: "info", text: "" },
+    { type: "info", text: "Loading contract..." },
+    { type: "info", text: "Evaluating 3 rules against 847 samples" },
+    { type: "info", text: "" },
+    { type: "pass", text: "✓ toxicity      0.02  (threshold < 0.1)" },
+    { type: "pass", text: "✓ accuracy      0.94  (threshold ≥ 0.9)" },
+    { type: "fail", text: "✗ hallucination 0.12  (threshold < 0.05)" },
+    { type: "info", text: "" },
+    { type: "result", text: "BLOCKED · Contract violation detected" },
+    { type: "info", text: "Run `geval explain` for details" },
   ]
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentLine(prev => (prev + 1) % (lines.length + 3))
-    }, 800)
+      setCurrentLine(prev => (prev + 1) % (lines.length + 4))
+    }, 600)
     return () => clearInterval(timer)
   }, [])
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText("geval check --contract safety.yaml")
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
-    <div className="relative">
-      <div className="rounded-xl border border-border bg-card overflow-hidden shadow-2xl">
-        <div className="flex items-center gap-2 px-4 py-3 bg-secondary/50 border-b border-border">
-          <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500/80" />
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-            <div className="w-3 h-3 rounded-full bg-green-500/80" />
+    <div className="relative group">
+      <div className="absolute -inset-px rounded-2xl bg-gradient-to-b from-primary/20 via-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl" />
+      
+      <div className="relative rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-secondary/30 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-500/70" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
+              <div className="w-3 h-3 rounded-full bg-green-500/70" />
+            </div>
+            <span className="text-xs text-muted-foreground font-mono">terminal</span>
           </div>
-          <span className="text-xs text-muted-foreground ml-2 font-mono">geval — ci/cd pipeline</span>
+          <button
+            onClick={handleCopy}
+            className="p-1.5 rounded-md hover:bg-secondary transition-colors"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-primary" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+            )}
+          </button>
         </div>
         
-        <div className="p-4 font-mono text-sm min-h-[280px] bg-[#0d1512]">
-          {lines.slice(0, Math.min(currentLine, lines.length)).map((line, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className={cn(
-                "leading-relaxed",
-                line.type === "command" && "text-foreground",
-                line.type === "output" && "text-muted-foreground",
-                line.type === "success" && "text-primary",
-                line.type === "error" && "text-red-400",
-                line.type === "blocked" && "text-red-400 font-semibold mt-2"
-              )}
-            >
-              {line.text}
-            </motion.div>
-          ))}
-          {currentLine < lines.length && (
-            <span className="inline-block w-2 h-4 bg-primary animate-pulse" />
+        <div className="p-5 font-mono text-sm min-h-[320px] bg-[#050807]">
+          <AnimatePresence mode="popLayout">
+            {lines.slice(0, Math.min(currentLine, lines.length)).map((line, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className={cn(
+                  "leading-relaxed py-0.5",
+                  line.type === "command" && "text-foreground font-medium",
+                  line.type === "info" && "text-muted-foreground/70",
+                  line.type === "pass" && "text-primary",
+                  line.type === "fail" && "text-red-400",
+                  line.type === "result" && "text-red-400 font-semibold pt-1"
+                )}
+              >
+                {line.text}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {currentLine <= lines.length && (
+            <span className="inline-block w-2 h-5 bg-primary/80 animate-pulse rounded-sm" />
           )}
         </div>
       </div>
-      
-      <div className="absolute -top-4 -right-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl" />
-      <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-accent/10 rounded-full blur-2xl" />
     </div>
   )
 }
 
-// Feature Explorer Component - Interactive left-right layout
-const featureData = [
-  {
-    id: "yaml",
-    title: "YAML Contracts",
-    icon: FileCode,
-    description: "Define quality thresholds in simple, version-controlled YAML files. Specify what 'acceptable' means for every metric that matters to your team.",
-    visual: "code",
-    code: `# .geval/contracts/safety.yaml
-name: safety-contract
+
+// ============================================================================
+// 3D Flip Card for Features
+// ============================================================================
+
+function FlipCard({ 
+  icon: Icon, 
+  title, 
+  teaser,
+  details,
+  index
+}: { 
+  icon: React.ElementType
+  title: string
+  teaser: string
+  details: string
+  index: number
+}) {
+  const [isFlipped, setIsFlipped] = useState(false)
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, margin: "-50px" })
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 40 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+      transition={{ 
+        duration: 0.6, 
+        delay: index * 0.1,
+        ease: [0.16, 1, 0.3, 1]
+      }}
+      className="h-[300px] perspective-1000 cursor-pointer group"
+      onMouseEnter={() => setIsFlipped(true)}
+      onMouseLeave={() => setIsFlipped(false)}
+      onClick={() => setIsFlipped(!isFlipped)}
+    >
+      <motion.div
+        animate={{ rotateY: isFlipped ? 180 : 0 }}
+        transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+        className="relative w-full h-full preserve-3d"
+        style={{ transformStyle: "preserve-3d" }}
+      >
+        {/* Front Face */}
+        <div 
+          className="absolute inset-0 backface-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-card/50 p-6 flex flex-col group-hover:border-primary/20 transition-colors duration-300"
+          style={{ backfaceVisibility: "hidden" }}
+        >
+          <div className="w-14 h-14 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-5 group-hover:scale-105 group-hover:bg-primary/15 transition-all duration-300">
+            <Icon className="w-7 h-7 text-primary" />
+          </div>
+          
+          <h3 className="text-xl font-semibold text-foreground mb-3">
+            {title}
+          </h3>
+          
+          <p className="text-muted-foreground leading-relaxed flex-1">
+            {teaser}
+          </p>
+        </div>
+        
+        {/* Back Face */}
+        <div 
+          className="absolute inset-0 backface-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5 p-6 flex flex-col justify-center"
+          style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+        >
+          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-4">
+            <Icon className="w-6 h-6 text-primary" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-3">
+            {title}
+          </h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {details}
+          </p>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ============================================================================
+// Interactive Solution Section
+// ============================================================================
+
+function InteractiveSolutionSection() {
+  const [activeStep, setActiveStep] = useState(0)
+  const [animationKey, setAnimationKey] = useState(0)
+  const ref = useRef(null)
+  const isInView = useInView(ref, { once: true, margin: "-100px" })
+
+  const steps = [
+    {
+      id: "define",
+      title: "Define",
+      subtitle: "Write the rules",
+      description: "Express what 'acceptable' means in simple YAML. Version it. Review it. Commit it.",
+      code: `name: production-contract
 version: 1.0
 
 rules:
-  - metric: toxicity_score
-    operator: "<"
-    threshold: 0.1
-    action: block
+  - metric: toxicity
+    threshold: "< 0.1"
     
-  - metric: accuracy
-    operator: ">="
-    threshold: 0.90
-    action: block
+  - metric: accuracy  
+    threshold: ">= 0.90"
     
-  - metric: latency_p99
-    operator: "<"
-    threshold: 500
-    action: warn`,
-  },
-  {
-    id: "cicd",
-    title: "CI/CD Integration",
-    icon: GitBranch,
-    description: "Required checks that block PRs when contracts fail. Native support for GitHub Actions, GitLab CI, and any CI system that can run commands.",
-    visual: "code",
-    code: `# .github/workflows/ai-release.yml
+  - metric: hallucination
+    threshold: "< 0.05"
+
+on_violation: block`,
+      color: "primary"
+    },
+    {
+      id: "integrate",
+      title: "Integrate",
+      subtitle: "Add to your pipeline",
+      description: "One line in your CI config. Works everywhere shell commands work.",
+      code: `# .github/workflows/ai-release.yml
 name: AI Release Gate
 
 on: [pull_request]
 
 jobs:
-  geval-check:
+  geval:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       
-      - name: Run Evals
-        run: npx promptfoo eval
-        
-      - name: Geval Contract Check
-        uses: geval-ai/action@v1
-        with:
-          contract: .geval/contracts/safety.yaml
-          results: ./eval-results.json`,
-  },
-  {
-    id: "cli",
-    title: "CLI Tools",
-    icon: Terminal,
-    description: "Simple, powerful commands for local development and CI. Check contracts, diff between runs, and get clear explanations of why checks pass or fail.",
-    visual: "terminal",
-    code: `$ geval check --contract safety.yaml
+      - name: Run Geval
+        run: |
+          npm i -g geval
+          geval check --contract safety.yaml`,
+      color: "accent"
+    },
+    {
+      id: "enforce",
+      title: "Enforce",
+      subtitle: "Block bad releases",
+      description: "Every PR gets a deterministic verdict. Pass, fail, or review automatically.",
+      code: `$ geval check --contract safety.yaml
 
-Loading contract: safety.yaml
-Fetching results: ./eval-results.json
+Loading contract...
+Evaluating 3 rules against 847 samples
 
-Checking 3 rules against 847 eval samples...
+✓ toxicity      0.02  (threshold < 0.1)
+✓ accuracy      0.94  (threshold >= 0.9)
+✗ hallucination 0.12  (threshold < 0.05)
 
-✓ toxicity_score: 0.03 (< 0.1)      PASS
-✓ accuracy:       0.94 (≥ 0.90)     PASS  
-✓ latency_p99:    312ms (< 500ms)   PASS
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONTRACT PASSED - Ready to ship
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-  },
-  {
-    id: "sources",
-    title: "Any Eval Source",
-    icon: Zap,
-    description: "We don't run evals—we enforce them. Ingest results from Promptfoo, LangSmith, Braintrust, OpenEvals, or any tool that outputs JSON.",
-    visual: "image",
-    imagePlaceholder: "A diagram showing multiple eval tool logos (Promptfoo, LangSmith, Braintrust, OpenAI Evals) on the left, with arrows flowing into a central Geval box, which outputs to GitHub/GitLab PR checks on the right. Dark theme, minimal, with green accent color.",
-  },
-  {
-    id: "oss",
-    title: "Open Source Core",
-    icon: Lock,
-    description: "Core enforcement logic is fully open source. Inspect, audit, fork, and contribute. No black-box decisions on your release pipeline.",
-    visual: "code",
-    code: `// Core contract evaluation - MIT Licensed
-// github.com/geval-ai/geval
-
-export function evaluateContract(
-  contract: Contract,
-  results: EvalResults
-): Decision {
-  const violations: Violation[] = []
-  
-  for (const rule of contract.rules) {
-    const value = results.metrics[rule.metric]
-    const passed = compare(value, rule.operator, rule.threshold)
-    
-    if (!passed) {
-      violations.push({
-        rule: rule.metric,
-        expected: \`\${rule.operator} \${rule.threshold}\`,
-        actual: value,
-        action: rule.action
-      })
+BLOCKED · Contract violation detected
+PR #421 cannot be merged`,
+      color: "primary"
     }
-  }
-  
-  return {
-    passed: violations.length === 0,
-    violations,
-    timestamp: Date.now()
-  }
-}`,
-  },
-  {
-    id: "audit",
-    title: "Audit Trail",
-    icon: Eye,
-    description: "Every decision logged. Every override tracked. When compliance asks 'why did this ship?', you have the answer in seconds.",
-    visual: "image",
-    imagePlaceholder: "A clean audit log interface showing a timeline of release decisions. Each entry shows: timestamp, PR number, decision (PASSED/BLOCKED), contract version, and who approved overrides. Dark theme, table/list format, with green checkmarks and red X marks for decisions.",
-  },
-]
+  ]
 
-function FeatureExplorer() {
-  const [activeFeature, setActiveFeature] = useState("yaml")
-  const [progress, setProgress] = useState(0)
-  const [isPaused, setIsPaused] = useState(false)
-  const feature = featureData.find(f => f.id === activeFeature) || featureData[0]
-  const Icon = feature.icon
-  const DURATION = 5000 // 5 seconds per feature
-
-  // Auto-advance progress
+  // Auto-advance steps - simple cycling through 1→2→3→1...
   useEffect(() => {
-    if (isPaused) return
-    
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          // Move to next feature
-          const currentIndex = featureData.findIndex(f => f.id === activeFeature)
-          const nextIndex = (currentIndex + 1) % featureData.length
-          setActiveFeature(featureData[nextIndex].id)
-          return 0
-        }
-        return prev + (100 / (DURATION / 50)) // Update every 50ms
-      })
-    }, 50)
+    if (!isInView) return
+    const timer = setInterval(() => {
+      setActiveStep(prev => (prev + 1) % steps.length)
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [isInView, steps.length])
 
-    return () => clearInterval(interval)
-  }, [activeFeature, isPaused])
-
-  // Reset progress when manually selecting a feature
-  const handleFeatureClick = (id: string) => {
-    setActiveFeature(id)
-    setProgress(0)
-  }
+  // Update animation key when activeStep changes to force progress bar re-render
+  useEffect(() => {
+    setAnimationKey(prev => prev + 1)
+  }, [activeStep])
 
   return (
-    <div className="rounded-2xl border border-border bg-card/20 overflow-hidden">
-      <div className="grid lg:grid-cols-5">
-        {/* Left - Feature List */}
-        <div className="lg:col-span-2 bg-secondary/20 border-b lg:border-b-0 lg:border-r border-border relative">
-          <div className="p-2 lg:p-3">
-            <p className="px-3 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">Features</p>
-            <div className="space-y-0">
-              {featureData.map((item) => {
-                const ItemIcon = item.icon
-                const isActive = activeFeature === item.id
-                
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleFeatureClick(item.id)}
-                    onMouseEnter={() => setIsPaused(true)}
-                    onMouseLeave={() => setIsPaused(false)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-3 py-3 text-left transition-all duration-200 relative group",
-                      isActive 
-                        ? "bg-primary/10 lg:rounded-l-xl lg:rounded-r-none lg:mr-[-1px] lg:border-r lg:border-primary/30" 
-                        : "hover:bg-secondary/30"
-                    )}
-                  >
-                    {/* Progress indicator line - animates while active */}
-                    <div 
-                      className={cn(
-                        "absolute top-0 left-0 h-[2px] bg-primary transition-none",
-                        !isActive && "bg-transparent group-hover:bg-primary/30"
-                      )}
-                      style={{ 
-                        width: isActive ? `${progress}%` : '0%',
-                        transition: isActive ? 'none' : 'width 0.3s ease-out'
-                      }}
-                    />
-                    {/* Background track for non-active items on hover */}
-                    <div 
-                      className={cn(
-                        "absolute top-0 left-0 w-full h-[2px] bg-border/30 opacity-0 group-hover:opacity-100 transition-opacity",
-                        isActive && "opacity-100 bg-border/20"
-                      )}
-                    />
-                    
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors",
-                      isActive ? "bg-primary/20 border border-primary/30" : "bg-secondary/50"
-                    )}>
-                      <ItemIcon className={cn(
-                        "w-4 h-4",
-                        isActive ? "text-primary" : "text-muted-foreground"
-                      )} />
-                    </div>
-                    <span className={cn(
-                      "font-medium transition-colors text-sm flex-1",
-                      isActive ? "text-foreground" : "text-muted-foreground"
-                    )}>
-                      {item.title}
-                    </span>
-                  </button>
-                )
-              })}
+    <div ref={ref} className="relative">
+      {/* Progress Bar */}
+      <div className="flex gap-3 mb-12">
+        {steps.map((step, i) => (
+          <button
+            key={step.id}
+            onClick={() => setActiveStep(i)}
+            className="flex-1 group"
+          >
+            <div className="h-1.5 rounded-full bg-border overflow-hidden">
+              {i === activeStep ? (
+                <motion.div
+                  key={`progress-${i}-${animationKey}`}
+                  className="h-full bg-primary"
+                  initial={{ width: "0%" }}
+                  animate={{ width: "100%" }}
+                  transition={{ duration: 5, ease: "linear" }}
+                />
+              ) : (
+                <div 
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: i < activeStep ? "100%" : "0%" }}
+                />
+              )}
             </div>
-          </div>
-        </div>
+            <div className={cn(
+              "mt-3 text-sm font-medium transition-colors",
+              i === activeStep ? "text-primary" : "text-muted-foreground"
+            )}>
+              {step.title}
+            </div>
+          </button>
+        ))}
+      </div>
 
-        {/* Right - Feature Detail */}
-        <div className="lg:col-span-3">
-          <div className="p-4 lg:p-6">
+      {/* Content - Fixed height container to prevent layout shift */}
+      <div className="grid lg:grid-cols-2 gap-12 items-start min-h-[420px]">
+        {/* Left - Description */}
+        <div className="min-h-[200px]">
+          <AnimatePresence mode="wait">
             <motion.div
-              key={activeFeature}
-              initial={{ opacity: 0, x: 10 }}
+              key={activeStep}
+              initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-4"
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.4 }}
             >
-              {/* Header */}
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-primary" />
+              {/* Large Step Number */}
+              <div className="flex items-start gap-6 mb-6">
+                <div className={cn(
+                  "relative flex items-center justify-center",
+                  "w-24 h-24 rounded-3xl",
+                  "bg-gradient-to-br border-2 shadow-lg",
+                  steps[activeStep].color === "primary" 
+                    ? "from-primary/20 via-primary/10 to-transparent border-primary/40 shadow-primary/20"
+                    : "from-accent/20 via-accent/10 to-transparent border-accent/40 shadow-accent/20"
+                )}>
+                  <span className={cn(
+                    "text-5xl font-black tracking-tighter",
+                    steps[activeStep].color === "primary" ? "text-primary" : "text-accent"
+                  )}>
+                    {String(activeStep + 1).padStart(2, '0')}
+                  </span>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">{feature.title}</h3>
-                  <p className="text-xs text-muted-foreground">Core Feature</p>
+                <div className="pt-2">
+                  <h3 className="text-3xl font-bold text-foreground mb-1">
+                    {steps[activeStep].title}
+                  </h3>
+                  <p className="text-base text-muted-foreground">
+                    {steps[activeStep].subtitle}
+                  </p>
                 </div>
               </div>
               
-              <p className="text-muted-foreground leading-relaxed text-sm">
-                {feature.description}
+              <p className="text-lg text-muted-foreground leading-relaxed">
+                {steps[activeStep].description}
               </p>
-
-              {/* Visual Content */}
-              {(feature.visual === "code" || feature.visual === "terminal") && feature.code && (
-                <div className="rounded-xl border border-border bg-[#0a0f0d] overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-secondary/20 border-b border-border">
-                    <div className="flex gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-                      <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
-                      <div className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
-                    </div>
-                    <span className="text-xs text-muted-foreground ml-2 font-mono">
-                      {feature.id === "yaml" && ".geval/contracts/safety.yaml"}
-                      {feature.id === "cicd" && ".github/workflows/ai-release.yml"}
-                      {feature.id === "cli" && "geval — terminal"}
-                      {feature.id === "oss" && "geval/core/evaluate.ts"}
-                    </span>
-                  </div>
-                  <pre className="p-4 text-xs overflow-x-auto whitespace-pre max-h-[280px]">
-                    <code className={cn(
-                      "font-mono",
-                      feature.visual === "terminal" ? "text-foreground" : "text-muted-foreground"
-                    )}>
-                      {feature.code}
-                    </code>
-                  </pre>
-                </div>
-              )}
-
-              {feature.visual === "image" && (
-                <div className="rounded-xl border border-dashed border-border bg-secondary/10 p-6 min-h-[200px] flex flex-col items-center justify-center gap-3">
-                  <div className="w-14 h-14 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center">
-                    <Icon className="w-7 h-7 text-primary/40" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground/60 font-medium mb-1">Image Placeholder</p>
-                    <p className="text-xs text-muted-foreground/40 max-w-xs leading-relaxed">
-                      {feature.imagePlaceholder}
-                    </p>
-                  </div>
-                </div>
-              )}
             </motion.div>
-          </div>
+          </AnimatePresence>
+        </div>
+
+        {/* Right - Code Block - Fixed height */}
+        <div className="min-h-[380px]">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeStep}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.98 }}
+              transition={{ duration: 0.4 }}
+              className="rounded-xl border border-border bg-card overflow-hidden h-full"
+            >
+            <div className="flex items-center justify-between px-4 py-2 bg-secondary/30 border-b border-border">
+              <span className="text-xs text-muted-foreground font-mono">
+                {activeStep === 0 ? "safety.yaml" : activeStep === 1 ? ".github/workflows/ai-release.yml" : "terminal"}
+              </span>
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+              </div>
+            </div>
+            <pre className="p-4 overflow-x-auto text-sm">
+              <code className={cn(
+                "font-mono",
+                activeStep === 2 ? "text-muted-foreground" : "text-muted-foreground"
+              )}>
+                {steps[activeStep].code.split('\n').map((line, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.03, duration: 0.2 }}
+                    className={cn(
+                      line.includes('✓') && "text-primary",
+                      line.includes('✗') && "text-red-400",
+                      line.includes('BLOCKED') && "text-red-400 font-semibold",
+                      line.startsWith('#') && "text-muted-foreground/60"
+                    )}
+                  >
+                    {line}
+                  </motion.div>
+                ))}
+              </code>
+            </pre>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>
   )
 }
 
-// Main Page Component
-export default function HomePage() {
-  return (
-    <div className="min-h-screen grid-bg">
-      {/* Floating Navigation */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-4xl px-4">
-        <nav className="flex items-center justify-between px-4 py-3 bg-background/80 backdrop-blur-md border border-border rounded-2xl shadow-lg">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/50 flex items-center justify-center group-hover:glow-primary transition-all">
-              <Shield className="w-4 h-4 text-primary" />
-            </div>
-            <span className="text-lg font-semibold text-foreground">geval</span>
-          </Link>
 
-          <div className="flex items-center gap-2">
-            {/* Social Links */}
-            <div className="hidden sm:flex items-center gap-1">
+
+// ============================================================================
+// Floating Particles Background (Client-only to avoid hydration mismatch)
+// ============================================================================
+
+function FloatingParticles() {
+  const [mounted, setMounted] = useState(false)
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) return null
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {Array.from({ length: 15 }).map((_, i) => (
+        <motion.div
+          key={i}
+          className="absolute w-1 h-1 rounded-full bg-primary/30"
+          style={{
+            left: `${(i * 7) % 100}%`,
+            top: `${(i * 13) % 100}%`,
+          }}
+          animate={{
+            y: [-10, 10, -10],
+            opacity: [0.2, 0.4, 0.2],
+          }}
+          transition={{
+            duration: 3 + (i % 3),
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ============================================================================
+// Main Page Component
+// ============================================================================
+
+export default function HomePage() {
+  const features = [
+    {
+      icon: FileCode,
+      title: "YAML Contracts",
+      teaser: "Define quality thresholds in simple, version-controlled files.",
+      details: "Express your quality gates in declarative YAML. Define metrics, thresholds, operators, and failure behaviors. Review changes like code. No hidden configs, no magic just clear, auditable rules that your whole team can understand."
+    },
+    {
+      icon: GitBranch,
+      title: "CI/CD Native",
+      teaser: "Required checks that block PRs. Native support for all major CI systems.",
+      details: "Designed from day one to be a CI primitive. Set Geval as a required status check, and no PR merges without explicit contract compliance. Works with GitHub Actions, GitLab CI, CircleCI, Jenkins, or any system that runs shell commands."
+    },
+    {
+      icon: Terminal,
+      title: "CLI First",
+      teaser: "Simple commands for local development and CI. No web UI required.",
+      details: "Everything happens in your terminal. Run locally before pushing. Integrate in CI with a single command. Inspect failures with detailed explanations. No dashboards to log into, no tabs to switch just fast feedback in your existing workflow."
+    },
+    {
+      icon: Zap,
+      title: "Any Eval Source",
+      teaser: "Ingest from Promptfoo, LangSmith, Braintrust, or any JSON output.",
+      details: "Geval is eval-agnostic. Point it at JSON results from your favorite eval framework like Promptfoo, LangSmith, Braintrust, Ragas, or custom scripts. We consume the metrics; you keep your eval stack."
+    },
+    {
+      icon: Lock,
+      title: "Open Source Core",
+      teaser: "Inspect, audit, and fork. No black-box decisions on your pipeline.",
+      details: "The core engine is MIT-licensed and fully open. Audit every decision. Fork and customize. Run air-gapped. Your release pipeline is too critical for vendor lock-in or opaque black boxes."
+    },
+    {
+      icon: Eye,
+      title: "Audit Trail",
+      teaser: "Every decision logged. Every override tracked. Compliance-ready.",
+      details: "Immutable logs of every contract evaluation. When compliance asks 'why did this ship?', you have the answer in seconds. Track who overrode what, when, and why. SOC2 and ISO evidence collection built-in."
+    },
+  ]
+
+  return (
+    <div className="min-h-screen relative">
+      <FloatingParticles />
+      
+      {/* Navigation */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="fixed top-0 left-0 right-0 z-50"
+      >
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-4">
+          <nav className="flex items-center justify-between px-4 py-2.5 glass border border-border/50 rounded-2xl">
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="relative w-8 h-8 group-hover:scale-100 transition-transform">
+                <Image 
+                  src="/white_bg_greenlogo.svg" 
+                  alt="Geval Logo" 
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span className="text-2xl font-semibold gradient-text text-glow">Geval</span>
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-1 mr-2">
+                <Link
+                  href="https://twitter.com/geval_labs"
+                  target="_blank"
+                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-lg transition-all"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </Link>
+                <Link
+                  href="https://linkedin.com/company/geval-labs"
+                  target="_blank"
+                  className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-lg transition-all"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                  </svg>
+                </Link>
+              </div>
+
               <Link
-                href="https://twitter.com/geval_dev"
+                href={`https://github.com/${GITHUB_REPO}`}
                 target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-lg transition-all"
-                aria-label="Twitter"
+                className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg hover:border-primary/30 transition-all"
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
+                <Github className="w-4 h-4" />
+                <span className="text-border">|</span>
+                <Star className="w-3.5 h-3.5" />
+                <NavStarCount />
               </Link>
+
               <Link
-                href="https://linkedin.com/company/geval"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-lg transition-all"
-                aria-label="LinkedIn"
+                href="#waitlist"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 transition-all"
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                </svg>
+                <span>Get Early Access</span>
               </Link>
             </div>
-            
-            <GitHubStars />
-            
-            {/* Join Waitlist Button - Enterprise OSS Style */}
-            <Link
-              href="#waitlist"
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-foreground border border-border rounded-xl hover:border-primary/50 hover:bg-primary/5 transition-all group"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              <span>Get Early Access</span>
-            </Link>
-          </div>
-        </nav>
-      </div>
+          </nav>
+        </div>
+      </motion.header>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
-        </div>
+      <section className="relative pt-32 sm:pt-40 pb-20 px-4 sm:px-6 overflow-hidden">
+        <div className="absolute inset-0 gradient-mesh" />
+        <div className="absolute inset-0 dot-grid opacity-30" />
+        
+        <div className="relative max-w-6xl mx-auto">
+          <div className="grid lg:grid-cols-2 gap-16">
+            <div className="max-w-xl">
+              {/* <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="inline-flex items-center gap-2 px-3 py-1.5 mb-6 text-xs font-medium bg-primary/10 border border-primary/20 rounded-full"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-primary pulse-dot" />
+                <span className="text-primary">Open Source · Coming Q2 2026</span>
+              </motion.div> */}
 
-        <div className="max-w-6xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 items-start">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 mb-6">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-xs text-primary font-medium">Open Source • Launching Q2 2026</span>
-              </div>
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-foreground tracking-tight leading-[1.1] mb-6"
+              >
+                Evals are not reports.
+                <br />
+                <span className="text-glow gradient-text">They are release contracts.</span>
+              </motion.h1>
 
-              {/* Headline */}
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight">
-                Evals are not reports.{" "}
-                <span className="text-primary text-glow">They are release contracts.</span>
-              </h1>
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="text-lg text-muted-foreground leading-relaxed mb-8"
+              >
+                The open-source release enforcement engine that turns your eval results 
+                into deterministic go/no-go decisions. Block unverified AI changes before they reach production.
+              </motion.p>
 
-              {/* Subheadline */}
-              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                Geval is the open-source release enforcement engine that turns eval results into 
-                deterministic go/no-go decisions inside CI/CD. Block unverified AI changes before production.
-              </p>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="flex flex-col sm:flex-row gap-4 mb-8"
+              >
+                <Link
+                  href="#waitlist"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 text-base font-medium text-primary-foreground bg-primary rounded-xl hover:bg-primary/90 active:scale-[0.98] transition-all"
+                >
+                  Get Early Access
+                </Link>
+                {/* <GitHubStars /> */}
+              </motion.div>
 
-              {/* Social proof */}
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground"
+              >
+                <span className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary" />
-                  <span>GitHub Actions</span>
-                </div>
-                <div className="flex items-center gap-2">
+                  GitHub Actions
+                </span>
+                <span className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary" />
-                  <span>GitLab CI</span>
-                </div>
-                <div className="flex items-center gap-2">
+                  GitLab CI
+                </span>
+                <span className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-primary" />
-                  <span>Any eval tool</span>
-                </div>
-              </div>
-
-              {/* GitHub stars highlight */}
-              {/* <div className="mt-6 pt-6 border-t border-border">
-                <p className="text-sm text-muted-foreground mb-3">Follow our progress on GitHub</p>
-                <GitHubStars />
-              </div> */}
-            </motion.div>
-
-            <div>
-              <TerminalDemo />
+                  Any CI/CD
+                </span>
+              </motion.div>
             </div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <TerminalDemo />
+            </motion.div>
           </div>
         </div>
       </section>
 
       {/* Problem Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 border-t border-border">
-        <div className="max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-4">
-              The problem we&apos;re solving
+      <section className="py-24 px-4 sm:px-6 border-t border-border/50">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-full mb-4">
+              The Problem
+            </span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground tracking-tight mb-4">
+              Evals exist. Enforcement doesn&apos;t.
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Teams run LLM evals, but shipping decisions are still manual. Results are reviewed via 
-              dashboards, Slack messages, and &quot;vibe checks.&quot; Regressions ship because nothing blocks the PR.
-            </p>
-          </motion.div>
+          </div>
 
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-3 gap-6">
             {[
-              { icon: Eye, text: "Evals exist, but shipping is manual" },
-              { icon: AlertTriangle, text: "Regressions ship unblocked" },
-              { icon: XCircle, text: "No one can answer: \"Why did this ship?\"" },
+              { 
+                icon: Eye, 
+                title: "Dashboards don't block PRs",
+                description: "Metrics are measured, then ignored. There's no enforcement between eval results and merge buttons."
+              },
+              { 
+                icon: AlertCircle, 
+                title: "Regressions ship silently",
+                description: "Without automated gates, AI quality can degrade with every deployment. No one notices until production."
+              },
+              { 
+                icon: XCircle, 
+                title: "No audit trail",
+                description: "When compliance asks 'why did this ship?', teams dig through Slack and hope someone remembers."
+              },
             ].map((item, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="flex items-center gap-3 p-4 rounded-xl border border-red-400/20 bg-red-400/5"
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ delay: i * 0.1, duration: 0.4 }}
+                whileHover={{ y: -5 }}
+                className="relative p-6 rounded-2xl border border-red-500/10 bg-gradient-to-b from-red-500/5 to-transparent group cursor-default hover:border-red-500/20 transition-colors"
               >
-                <item.icon className="w-5 h-5 text-red-400 flex-shrink-0" />
-                <span className="text-sm text-foreground">{item.text}</span>
+                <item.icon className="w-6 h-6 text-red-400 mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">{item.title}</h3>
+                <p className="text-muted-foreground leading-relaxed">{item.description}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* What We're Building - Interactive Feature Explorer */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 border-t border-border bg-secondary/10">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-4">
-              What we&apos;re building
+      {/* Solution Section - Interactive */}
+      <section className="py-24 px-4 sm:px-6 border-t border-border/50 bg-secondary/20">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-primary bg-primary/10 border border-primary/20 rounded-full mb-4">
+              The Solution
+            </span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground tracking-tight mb-4">
+              A gate, not a graph.
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              A decision authority, not a dashboard. A gate, not a graph.
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Geval consumes your existing eval results and applies explicit contracts. Every PR is deterministically allowed, blocked, or flagged for review.
             </p>
-          </motion.div>
+          </div>
 
-          <FeatureExplorer />
+          <InteractiveSolutionSection />
         </div>
       </section>
 
-      {/* How It Will Work - Flow Diagram Style */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8 border-t border-border">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-4">
-              How it will work
+      {/* Features Section - Flip Cards */}
+      <section className="py-24 px-4 sm:px-6 border-t border-border/50">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-primary bg-primary/10 border border-primary/20 rounded-full mb-4">
+              Features
+            </span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground tracking-tight">
+              Built for enforcement, not observation.
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              From code change to production in three deterministic steps
-            </p>
-          </motion.div>
+          </div>
 
-          {/* Flow Steps */}
-          <div className="relative">
-            <div className="grid lg:grid-cols-3 gap-8 lg:gap-6">
-              {[
-                {
-                  step: "01",
-                  title: "Define",
-                  subtitle: "Set your release criteria",
-                  description: "Create YAML contracts that define what 'acceptable' means for your AI system",
-                  visual: "contract",
-                  accent: "from-primary/20 to-primary/5",
-                },
-                {
-                  step: "02", 
-                  title: "Integrate",
-                  subtitle: "Add to your pipeline",
-                  description: "One line in your CI config. Geval runs on every PR automatically",
-                  visual: "pipeline",
-                  accent: "from-accent/20 to-accent/5",
-                },
-                {
-                  step: "03",
-                  title: "Enforce",
-                  subtitle: "Ship with confidence",
-                  description: "PRs are blocked until contracts pass. No exceptions without explicit override",
-                  visual: "result",
-                  accent: "from-primary/20 to-primary/5",
-                },
-              ].map((item, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.15 }}
-                  className="relative"
-                >
-                  {/* Step Number */}
-                  <div className="flex justify-center mb-8">
-                    <span className={cn(
-                      "text-5xl sm:text-6xl font-black tracking-tighter",
-                      i === 0 && "text-primary/70",
-                      i === 1 && "text-accent/70",
-                      i === 2 && "text-primary/70",
-                    )} style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-                      {item.step}
-                    </span>
-                  </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature, i) => (
+              <FlipCard key={i} {...feature} index={i} />
+            ))}
+          </div>
+        </div>
+      </section>
 
-                  {/* Content Card */}
-                  <div className="p-6 rounded-2xl border border-border bg-card/30 h-full">
-                    <div className="text-center mb-4">
-                      <h3 className="text-xl font-bold text-foreground mb-1">{item.title}</h3>
-                      <p className="text-sm text-muted-foreground">{item.subtitle}</p>
-                    </div>
-                    
-                    <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-                      {item.description}
-                    </p>
+      {/* Comparison Section */}
+      <section className="py-24 px-4 sm:px-6 border-t border-border/50 bg-secondary/20">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="inline-flex items-center px-3 py-1 text-xs font-medium text-primary bg-primary/10 border border-primary/20 rounded-full mb-4">
+              Why Geval
+            </span>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-foreground tracking-tight mb-4">
+              Authority, not insight.
+            </h2>
+          </div>
 
-                    {/* Visual */}
-                    <div className="rounded-xl border border-border bg-[#0a0f0d] overflow-hidden">
-                      {item.visual === "contract" && (
-                        <pre className="p-3 text-xs overflow-x-auto">
-                          <code className="text-muted-foreground">
-{`rules:
-  - metric: toxicity
-    threshold: < 0.1
-  - metric: accuracy  
-    threshold: ≥ 0.90`}
-                          </code>
-                        </pre>
-                      )}
-                      {item.visual === "pipeline" && (
-                        <pre className="p-3 text-xs overflow-x-auto">
-                          <code className="text-muted-foreground">
-{`- name: Geval Check
-  uses: geval/action@v1
-  with:
-    contract: safety.yaml`}
-                          </code>
-                        </pre>
-                      )}
-                      {item.visual === "result" && (
-                        <div className="p-3 text-xs space-y-1">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-3 h-3 text-primary" />
-                            <span className="text-primary">toxicity: PASS</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-3 h-3 text-primary" />
-                            <span className="text-primary">accuracy: PASS</span>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-border text-primary font-medium">
-                            → PR #247 approved
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="p-8 rounded-2xl border border-border bg-card/50">
+              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-6">Eval Tools</h3>
+              <ul className="space-y-4">
+                {[
+                  "Dashboards & metrics",
+                  "Score tracking",
+                  "Manual review",
+                  "Post-hoc analysis"
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-3 text-muted-foreground">
+                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="p-8 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
+              <h3 className="text-sm font-medium text-primary uppercase tracking-wider mb-6">Geval</h3>
+              <ul className="space-y-4 relative">
+                {[
+                  "PR blocking",
+                  "CI/CD authority",
+                  "Release contracts",
+                  "Audit-grade history"
+                ].map((item, i) => (
+                  <li key={i} className="flex items-center gap-3 text-foreground font-medium">
+                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Comparison */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 border-t border-border bg-secondary/10 mt-8">
-        <div className="max-w-3xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-8"
-          >
-            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-4">
-              Geval vs. Eval Tools
-            </h2>
-            <p className="text-muted-foreground">
-              Eval tools answer &quot;What happened?&quot;<br />
-              Geval answers &quot;Was this <span className="text-primary">allowed</span> to ship?&quot;
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="grid grid-cols-2 gap-4"
-          >
-            <div className="p-6 rounded-xl border border-border bg-card/50">
-              <h3 className="font-semibold text-muted-foreground mb-4 text-sm uppercase tracking-wider">Eval Tools</h3>
-              <ul className="space-y-3 text-sm">
-                {["Dashboards & metrics", "Score tracking", "Manual review", "Post-hoc analysis"].map((item, i) => (
-                  <li key={i} className="flex items-center gap-2 text-muted-foreground">
-                    <Check className="w-4 h-4" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="p-6 rounded-xl border border-primary/30 bg-primary/5">
-              <h3 className="font-semibold text-primary mb-4 text-sm uppercase tracking-wider">Geval</h3>
-              <ul className="space-y-3 text-sm">
-                {["PR blocking", "CI/CD authority", "Release contracts", "Audit-grade history"].map((item, i) => (
-                  <li key={i} className="flex items-center gap-2 text-foreground">
-                    <Check className="w-4 h-4 text-primary" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </motion.div>
+      {/* Stats Section */}
+      <section className="py-24 px-4 sm:px-6 border-t border-border/50">
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { value: "100%", label: "Open Source" },
+              { value: "0", label: "Vendor Lock-in" },
+              { value: "<1s", label: "Decision Time" },
+              { value: "MIT", label: "License" },
+            ].map((stat, i) => (
+              <div
+                key={i}
+                className="text-center p-6 rounded-2xl bg-secondary/30 border border-border hover:border-primary/30 transition-colors"
+              >
+                <div className="text-3xl sm:text-4xl font-bold text-foreground mb-2 gradient-text">
+                  {stat.value}
+                </div>
+                <div className="text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section id="waitlist" className="py-20 px-4 sm:px-6 lg:px-8 border-t border-border scroll-mt-24">
+      {/* CTA Section */}
+      <section id="waitlist" className="py-24 px-4 sm:px-6 border-t border-border/50 scroll-mt-20">
         <div className="max-w-2xl mx-auto text-center">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent/30 bg-accent/10 mb-6">
-              {/* <Sparkles className="w-4 h-4 text-accent" /> */}
-              <span className="text-sm text-accent font-medium">Be first to know</span>
-            </div>
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 border border-primary/20 rounded-full mb-6">
+              Be first to know
+            </span>
 
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-3xl sm:text-4xl font-semibold text-foreground tracking-tight mb-4">
               Join the waitlist
             </h2>
-            <p className="text-muted-foreground mb-8">
-              Get early access when we launch. We&apos;re building in public and would love your feedback.
+
+            <p className="text-lg text-muted-foreground mb-8">
+              Get early access when we launch. We're building in public and would love your feedback.
             </p>
 
-            <div className="max-w-md mx-auto">
-              <WaitlistForm variant="inline" />
+            <div className="max-w-md mx-auto mb-8">
+              <WaitlistForm size="large" />
             </div>
 
-            <div className="mt-8 pt-8 border-t border-border">
-              <p className="text-sm text-muted-foreground mb-4">Want to follow our progress?</p>
-              <GitHubStars />
+            <div className="flex items-center justify-center gap-6 pt-6 border-t border-border">
+              <GitHubStars variant="minimal" />
+              <span className="text-muted-foreground">·</span>
+              <Link 
+                href="https://twitter.com/geval_labs" 
+                target="_blank"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Follow on Twitter
+              </Link>
             </div>
           </motion.div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-4 sm:px-6 lg:px-8 border-t border-border">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="py-12 px-4 sm:px-6 border-t border-border/50">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-primary/20 border border-primary/50 flex items-center justify-center">
-                <Shield className="w-3 h-3 text-primary" />
+              <div className="relative w-6 h-6">
+                <Image 
+                  src="/white_bg_greenlogo.svg" 
+                  alt="Geval Logo" 
+                  fill
+                  className="object-contain"
+                />
               </div>
-              <span className="text-sm font-medium text-foreground">geval</span>
+              <span className="text-2xl font-semibold gradient-text text-glow">Geval</span>
             </div>
 
             <p className="text-sm text-muted-foreground">
-              © 2026 Geval. Open source under MIT.
+              © 2026 Geval. Open source under MIT License.
             </p>
 
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <Link href={`https://github.com/${GITHUB_REPO}`} className="hover:text-primary transition-colors">GitHub</Link>
-              <Link href="https://twitter.com/geval_dev" className="hover:text-primary transition-colors">Twitter</Link>
+            <div className="flex items-center gap-6 text-sm">
+              <Link 
+                href={`https://github.com/${GITHUB_REPO}`}
+                target="_blank"
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Github className="w-4 h-4" />
+                <span>GitHub</span>
+              </Link>
+              <Link 
+                href="https://twitter.com/geval_labs"
+                target="_blank"
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                <span>Twitter</span>
+              </Link>
+              <Link 
+                href="https://linkedin.com/company/geval-labs"
+                target="_blank"
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                </svg>
+                <span>LinkedIn</span>
+              </Link>
             </div>
           </div>
         </div>
