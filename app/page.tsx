@@ -24,7 +24,7 @@ import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 
-const GITHUB_REPO = "overseek944/Geval"
+const GITHUB_REPO = "geval-labs/geval"
 
 // ============================================================================
 // GitHub Stars Component
