@@ -729,6 +729,13 @@ export default function HomePage() {
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex items-center gap-1 mr-2">
                 <Link
+                  // href="/docs"
+                  href="https://docs.geval.io"
+                  className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-lg transition-all"
+                >
+                  Docs
+                </Link>
+                <Link
                   href="https://twitter.com/geval_labs"
                   target="_blank"
                   className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary/50 rounded-lg transition-all"
@@ -1078,6 +1085,12 @@ export default function HomePage() {
             </p>
 
             <div className="flex items-center gap-6 text-sm">
+              <Link 
+                href="/docs"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Docs
+              </Link>
               <Link 
                 href={`https://github.com/${GITHUB_REPO}`}
                 target="_blank"
