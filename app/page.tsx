@@ -766,11 +766,19 @@ export default function HomePage() {
                 <NavStarCount />
               </Link>
 
-              <Link
+              {/* <Link
                 href="#waitlist"
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 transition-all"
               >
                 <span>Get Early Access</span>
+              </Link> */}
+              <Link
+                href={`https://github.com/${GITHUB_REPO}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-lg hover:bg-primary/90 transition-all"
+              >
+                <span>Try Now</span>
               </Link>
             </div>
           </nav>
@@ -822,11 +830,19 @@ export default function HomePage() {
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="flex flex-col sm:flex-row gap-4 mb-8"
               >
-                <Link
+                {/* <Link
                   href="#waitlist"
                   className="inline-flex items-center justify-center gap-2 px-6 py-3 text-base font-medium text-primary-foreground bg-primary rounded-xl hover:bg-primary/90 active:scale-[0.98] transition-all"
                 >
                   Get Early Access
+                </Link> */}
+                <Link
+                  href={`https://github.com/${GITHUB_REPO}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 text-base font-medium text-primary-foreground bg-primary rounded-xl hover:bg-primary/90 active:scale-[0.98] transition-all"
+                >
+                  Try Now
                 </Link>
                 {/* <GitHubStars /> */}
               </motion.div>
@@ -1026,7 +1042,7 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section id="waitlist" className="py-24 px-4 sm:px-6 border-t border-border/50 scroll-mt-20">
+      {/* <section id="waitlist" className="py-24 px-4 sm:px-6 border-t border-border/50 scroll-mt-20">
         <div className="max-w-2xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -1062,7 +1078,7 @@ export default function HomePage() {
             </div>
           </motion.div>
         </div>
-      </section>
+      </section> */}
 
       {/* Footer */}
       <footer className="py-12 px-4 sm:px-6 border-t border-border/50">
